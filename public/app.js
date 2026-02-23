@@ -490,6 +490,15 @@ requestAnimationFrame(breathLoop);
 // ---------------------------------------------------------------------------
 // Control panel
 // ---------------------------------------------------------------------------
+// Menu toggle
+const controlsEl  = document.getElementById('controls');
+const btnToggleEl = document.getElementById('btn-toggle');
+
+btnToggleEl.addEventListener('click', () => {
+  const collapsed = controlsEl.classList.toggle('collapsed');
+  btnToggleEl.textContent = collapsed ? '≡' : '×';
+});
+
 document.getElementById('btn-replay').addEventListener('click', async () => {
   const res = await fetch('/api/replay');
   if (!res.ok) {
