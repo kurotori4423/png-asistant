@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PNG Assistant</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="canvas">
+    <div id="stage">
+      <!-- z-index 0: Background -->
+      <img draggable="false" id="background" src="/images/background.png" alt="">
+
+      <div id="character">
+        <!-- z-index 1: Eye layer (normal / closed / half) -->
+        <img draggable="false" id="eye-normal" class="eye-layer" src="/images/normal.png" alt="">
+        <img draggable="false" id="eye-closed" class="eye-layer" src="/images/closed.png" alt="">
+        <img draggable="false" id="eye-half"   class="eye-layer" src="/images/half.png"   alt="">
+
+        <!-- z-index 2: Smile expression overlay -->
+        <img draggable="false" id="smile" src="/images/smile.png" alt="">
+
+        <!-- z-index 3: Mouth (closed mouth diff; hidden = mouth open) -->
+        <img draggable="false" id="mouth" src="/images/mouth.png" alt="">
+      </div>
+      <canvas id="particles"></canvas>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button id="btn-replay">▶ テスト再生</button>
+    <div class="divider"></div>
+    <button id="btn-effects" class="active">✦ エフェクト</button>
+    <div class="divider"></div>
+    <div id="expression-buttons">
+      <button class="btn-expr active" data-expr="normal">通常</button>
+      <button class="btn-expr" data-expr="smile">笑顔</button>
+    </div>
+    <div class="divider"></div>
+    <div id="volume-control">
+      <span>🔊</span>
+      <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="1">
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
