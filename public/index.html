@@ -32,6 +32,30 @@
     </div>
   </div>
 
+  <!-- ------------------------------------------------------------------ -->
+  <!-- Chat panel (Stage 1): text input → OpenClaw Gateway → streamed reply -->
+  <!-- ------------------------------------------------------------------ -->
+  <div id="chat-panel">
+    <div id="chat-header">
+      <span id="chat-title">Chat</span>
+      <button id="chat-toggle" title="Toggle chat">−</button>
+    </div>
+    <div id="chat-body">
+      <!-- Transcript: chat.delta / chat.final / chat.error events render here -->
+      <div id="chat-transcript" role="log" aria-live="polite"></div>
+      <div id="chat-input-row">
+        <input
+          type="text"
+          id="chat-input"
+          placeholder="Type a message…"
+          autocomplete="off"
+          maxlength="4096"
+        >
+        <button id="chat-send">Send</button>
+      </div>
+    </div>
+  </div>
+
   <div id="controls">
     <button id="btn-toggle" title="メニュー">×</button>
     <div id="controls-inner">

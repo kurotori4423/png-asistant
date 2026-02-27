@@ -164,6 +164,9 @@ function connectWebSocket() {
       playAudio(msg.data, msg.mimeType);
     } else if (msg.type === 'expression') {
       setExpression(msg.value);
+    } else if (msg.type === 'chat.delta' || msg.type === 'chat.final' || msg.type === 'chat.error') {
+      // Relay streaming chat events from the gateway to the chat UI.
+      handleChatEvent(msg);
     }
   });
 
@@ -525,6 +528,161 @@ document.querySelectorAll('.btn-expr').forEach((btn) => {
       btn.classList.add('active');
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// Chat UI  (Stage 1)
+//
+// The browser never touches the OpenClaw token – all gateway communication
+// is handled server-side.  The browser only:
+//   1. POSTs { text } to /api/chat
+//   2. Receives chat.delta / chat.final / chat.error via the existing WS
+// ---------------------------------------------------------------------------
+const chatPanelEl    = document.getElementById('chat-panel');
+const chatToggleEl   = document.getElementById('chat-toggle');
+const chatTranscript = document.getElementById('chat-transcript');
+const chatInputEl    = document.getElementById('chat-input');
+const chatSendEl     = document.getElementById('chat-send');
+
+// Currently streaming assistant entry (content span), null when idle.
+let activeAssistantContent = null;
+
+/** Toggle the chat panel open/closed. */
+chatToggleEl.addEventListener('click', () => {
+  const collapsed = chatPanelEl.classList.toggle('collapsed');
+  chatToggleEl.textContent = collapsed ? '+' : '−';
+});
+
+/**
+ * Append a new entry row to the transcript.
+ * @param {'user'|'assistant'} role
+ * @param {string} text  Initial text content.
+ * @returns {HTMLElement}  The content span (so callers can update it live).
+ */
+function appendChatEntry(role, text) {
+  const entry = document.createElement('div');
+  entry.className = `chat-entry chat-entry--${role}`;
+
+  const roleLabel = document.createElement('span');
+  roleLabel.className = 'chat-entry-role';
+  roleLabel.textContent = role === 'user' ? 'You' : 'Assistant';
+
+  const content = document.createElement('span');
+  content.className = 'chat-entry-content';
+  content.textContent = text;
+
+  entry.appendChild(roleLabel);
+  entry.appendChild(content);
+  chatTranscript.appendChild(entry);
+
+  // Auto-scroll to bottom.
+  chatTranscript.scrollTop = chatTranscript.scrollHeight;
+
+  return content;
+}
+
+/** Enable or disable the send controls together. */
+function setChatControlsEnabled(enabled) {
+  chatInputEl.disabled = !enabled;
+  chatSendEl.disabled  = !enabled;
+}
+
+/** Send the typed message to the server. */
+async function sendChatMessage() {
+  const text = chatInputEl.value.trim();
+  if (!text) return;
+
+  chatInputEl.value = '';
+
+  // Show the user's message in the transcript immediately.
+  appendChatEntry('user', text);
+
+  // Pre-create the assistant entry that will be filled in by streaming events.
+  const assistantContent = appendChatEntry('assistant', '');
+  assistantContent.closest('.chat-entry').classList.add('chat-entry--streaming');
+  activeAssistantContent = assistantContent;
+
+  setChatControlsEnabled(false);
+
+  try {
+    const res  = await fetch('/api/chat', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ text }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      // Server returned an error before even reaching the gateway.
+      finishAssistantEntry('[Error: ' + (data.error || 'server error') + ']', true);
+    }
+    // On success, streaming reply arrives as WebSocket events (chat.delta / chat.final).
+  } catch (err) {
+    finishAssistantEntry('[Error: ' + err.message + ']', true);
+  }
+}
+
+/**
+ * Finalise the active assistant entry and re-enable input.
+ * @param {string|null} finalText  If non-null, overwrite the content.
+ * @param {boolean}     isError    Whether to mark the entry as an error.
+ */
+function finishAssistantEntry(finalText, isError) {
+  if (!activeAssistantContent) return;
+
+  const entry = activeAssistantContent.closest('.chat-entry');
+  entry.classList.remove('chat-entry--streaming');
+
+  if (finalText !== null) {
+    activeAssistantContent.textContent = finalText;
+  }
+  if (isError) {
+    entry.classList.add('chat-entry--error');
+  }
+
+  activeAssistantContent = null;
+  setChatControlsEnabled(true);
+  chatInputEl.focus();
+}
+
+/**
+ * Handle chat streaming events relayed from the gateway via WebSocket.
+ * Called from the existing ws.addEventListener('message', …) handler.
+ *
+ * @param {{ type: string, runId?: string, text?: string, state?: string, error?: string }} msg
+ */
+function handleChatEvent(msg) {
+  if (msg.type === 'chat.delta') {
+    // Streamed chunk: append to the live entry.
+    if (!activeAssistantContent) return;
+    activeAssistantContent.textContent += msg.text || '';
+    chatTranscript.scrollTop = chatTranscript.scrollHeight;
+
+  } else if (msg.type === 'chat.final') {
+    // Stream complete.  The final message may carry the full text.
+    if (!activeAssistantContent) return;
+    const entry = activeAssistantContent.closest('.chat-entry');
+    // Store metadata for debugging / future use.
+    if (msg.runId) entry.dataset.runId = msg.runId;
+    if (msg.state) entry.dataset.state = msg.state;
+    // If the final event includes the complete text, prefer it; otherwise keep deltas.
+    finishAssistantEntry(msg.text != null ? msg.text : null, false);
+
+  } else if (msg.type === 'chat.error') {
+    // Gateway reported an error for this run.
+    if (!activeAssistantContent) return;
+    const errorMsg = '[Error: ' + (msg.error || 'unknown gateway error') + ']';
+    finishAssistantEntry(errorMsg, true);
+  }
+}
+
+// Wire up send button and Enter key.
+chatSendEl.addEventListener('click', sendChatMessage);
+chatInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
 });
 
 // ---------------------------------------------------------------------------
